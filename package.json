@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "typescript": "^5.3.3"
+  },
+  "scripts": {
+    "start": "http-server",
+    "build": "tsc",
+    "copy-static": "copy src\\index.html dist"
+  }
+}
