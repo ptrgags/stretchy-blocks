@@ -1,42 +1,55 @@
+import { RenderPipeline } from "./render_pipeline.js";
+
 async function get_device(): Promise<GPUDevice> {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
         throw new Error("Your browser doesn't support WebGPU :(");
     }
 
-    return await adapter.requestDevice();
-}
-
-async function make_shader(device: GPUDevice, filename: string): Promise<GPUShaderModule> {
-    const response = await fetch(filename);
-    const code = await response.text();
-
-    const shader_module = device.createShaderModule({code});
-    const compilation_info = await shader_module.getCompilationInfo();
-    if (compilation_info.messages.length > 0) {
-        let had_error = false;
-        console.log("Shader compilation log:");
-        for (const msg of compilation_info.messages) {
-            console.log(`${msg.lineNum}:${msg.linePos} - ${msg.message}`);
-            had_error ||= msg.type === "error";
-
-            if (had_error) {
-                throw new Error("Shader failed to compile!");
-            }
-        }
-    }
-
-    return shader_module;
+    return await adapter.requestDevice()
 }
 
 async function main() {
-    const device = await get_device();
-    const render = () => {
-        const commandEncoder = device.createCommandEncoder();
-        device.queue.submit([commandEncoder.finish()]);
-        requestAnimationFrame(render);
+    const device = await get_device()
+
+    const canvas = document.getElementById("webgpu-canvas") as HTMLCanvasElement
+    const context = canvas.getContext("webgpu")
+
+    if (context === null) {
+        return;
     }
-    requestAnimationFrame(render);
+
+    const render_pipeline = await RenderPipeline.build(device, context)
+
+    const render = () => {
+        const encoder = device.createCommandEncoder()
+
+        render_pipeline.render(encoder, context)
+        
+        device.queue.submit([encoder.finish()])
+        requestAnimationFrame(render)
+    }
+    requestAnimationFrame(render)
 }
 
-main();
+main()
+
+function export_screenshot(data_url: string) {
+    const a = document.createElement('a')
+    a.href = data_url
+    a.download = 'screenshot.png'
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+// This works, just gotta 
+document.addEventListener('keyup', event => {
+    if (event.code === 'Space') {
+        const canvas = document.getElementById('webgpu-canvas') as HTMLCanvasElement
+        const data_url = canvas?.toDataURL();
+        if (data_url !== undefined) {
+            export_screenshot(data_url);
+        }
+    }
+})

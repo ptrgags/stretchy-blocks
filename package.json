@@ -7,6 +7,6 @@
   "scripts": {
     "start": "http-server",
     "build": "tsc",
-    "copy-static": "copy src\\index.html dist"
+    "copy-static": "copy-static.sh"
   }
 }
