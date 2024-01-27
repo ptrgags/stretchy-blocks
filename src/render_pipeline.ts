@@ -75,6 +75,16 @@ function * generate_cube_data(): Generator<number, void, undefined> {
 }
 
 const CUBE_DATA: number[] = [...generate_cube_data()]
+for (let i = 0; i < CUBE_DATA.length / 6; i++) {
+    console.log(
+        CUBE_DATA[6 * i + 0],
+        CUBE_DATA[6 * i + 1],
+        CUBE_DATA[6 * i + 2],
+        CUBE_DATA[6 * i + 3],
+        CUBE_DATA[6 * i + 4],
+        CUBE_DATA[6 * i + 5],
+    )
+}
 
 function configure_context(device: GPUDevice, context: GPUCanvasContext) {
     context?.configure({

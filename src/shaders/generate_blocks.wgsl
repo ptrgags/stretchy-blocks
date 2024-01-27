@@ -1,4 +1,4 @@
-const GRID_SIZE: u32 = 32;
+const GRID_SIZE: u32 = 32u;
 
 struct Block {
     id: u32,

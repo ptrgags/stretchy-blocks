@@ -51,11 +51,26 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
 
     let rotated = TILT * rotate_y(time) * position_model;
 
-    // The blocks fit within [-5, 5]^3.
-    // Our view frustum will be orthographic, but the canvas size has a 5:7 aspect ratio
-    // so let's pretend we're in a box that's 5:5:7 in aspect ratio.
-    const VIEW_RADII = 2.0 * vec3f(5.0, 7.0, 5.0);
-    var position_clip = rotated / VIEW_RADII;
+    // Before rotation, the blocks fit within [-5, 5]^3.
+    // After rotation, it's at most 5 * sqrt(3) in every direction, which is about 8.66
+    // So let's be generous and say it fits within [-10, 10]^3
+    // The canvas size has a 5:7 aspect ratio, so if our width is 20 units wide, then
+    // the height is 20 / (5/7) = 28 units.
+    // So we want to map the box [-10, 10] x [-14, 14] x [-10, 10] to the
+    // normalized box [-1, 1], [-1, 1], [0, 1].
+    // for x: divide by 10
+    // for y: divide by 14
+    // for z: divide by 2 * 10 (to get [-0.5, 0.5]), 
+    //        multiply by -1 (since depth goes into the screen),
+    //        then add 0.5 to get [0, 1]
+    var position_clip = rotated / vec3f(10.0, 14.0, -20.0) + vec3f(0.0, 0.0, 0.5);
+
+    let coords_from_center = grid_coords - DIMENSIONS / 2;
+    const RADIUS = 3.5;
+    let yeet_mask = step(RADIUS * RADIUS, f32(dot(coords_from_center, coords_from_center)));
+
+    const YEET = 10000.0;
+    position_clip.x += YEET * yeet_mask; //f32(dot(grid_coords, vec3u(1)) % 2 == 1);
 
     var output: VertexOutput;
     output.position = vec4f(position_clip, 1.0);
@@ -69,8 +84,11 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4f {
+    let dist = 2.0 * abs(input.uvw - 0.5);
+    let edge_masks = step(vec3f(0.8), dist);
+    let masks = edge_masks.yzx * edge_masks.zxy;
+    let brightness = max(max(masks.x, masks.y), masks.z);
+    let color = mix(input.uvw, vec3f(0.0), brightness);
 
-    let shading = f32(input.grid_coords.z) / f32(DIMENSIONS.z);
-    // mango cube
-    return vec4f(shading * input.uvw, 1.0);
+    return vec4f(color, 1.0);
 }

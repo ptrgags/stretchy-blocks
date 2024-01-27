@@ -1,2 +1,2 @@
 #!/bin/bash
-cp -r src/index.html src/shaders/ dist/
+\cp -r src/index.html src/shaders/ dist/
