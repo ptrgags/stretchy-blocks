@@ -5,11 +5,12 @@ const SWAP_CHAIN_FORMAT = "bgra8unorm"
 // 6 faces * 3 triangle vertices (unique because of normals)
 const CUBE_VERTICES = 36;
 const FACES = 6;
-const QUAD_VERTICES = 6;
 const SIZE_VEC3F = 4 * 3;
 const SIZE_POSITION = SIZE_VEC3F;
 const SIZE_NORMAL = SIZE_VEC3F;
 const SIZE_VERTEX = SIZE_POSITION + SIZE_NORMAL;
+
+const INSTANCE_COUNT = 10 * 10 * 10;
 
 const CUBE_POSITIONS = [
     [0, 0, 0],
@@ -176,7 +177,7 @@ export class RenderPipeline {
         const render_pass = encoder.beginRenderPass(pass_description)
         render_pass.setPipeline(this.render_pipeline)
         render_pass.setVertexBuffer(0, this.vertex_buffer)
-        render_pass.draw(CUBE_VERTICES);
+        render_pass.draw(CUBE_VERTICES, INSTANCE_COUNT);
         render_pass.end();
     }
 
