@@ -19,7 +19,7 @@ async function main() {
         return;
     }
 
-    const render_pipeline = await RenderPipeline.build(device, context)
+    const render_pipeline = await RenderPipeline.build(device, canvas, context)
 
     const start = performance.now()
     const render = () => {

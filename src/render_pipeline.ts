@@ -146,6 +146,14 @@ function make_bind_group_layout(device: GPUDevice): GPUBindGroupLayout {
     })
 }
 
+function make_depth_texture(device: GPUDevice, canvas: HTMLCanvasElement): GPUTexture {
+    return device.createTexture({
+        size: [canvas.width, canvas.height],
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
+    })
+}
+
 async function make_render_pipeline(
     device: GPUDevice,
     bind_group_layout: GPUBindGroupLayout
@@ -194,6 +202,16 @@ async function make_render_pipeline(
         layout: pipeline_layout,
         vertex: vertex_state,
         fragment: fragment_state,
+        primitive: {
+            topology: "triangle-list",
+            frontFace: "ccw",
+            cullMode: "back"
+        },
+        depthStencil: {
+            depthWriteEnabled: true,
+            depthCompare: "less",
+            format: "depth24plus"
+        },
     })
 
     return render_pipeline
@@ -204,17 +222,20 @@ export class RenderPipeline {
     uniform_buffer: GPUBuffer
     vertex_buffer: GPUBuffer
     bind_group: GPUBindGroup
+    depth_texture: GPUTexture
 
     constructor(
         render_pipeline: GPURenderPipeline,
         uniform_buffer: GPUBuffer,
         vertex_buffer: GPUBuffer,
-        bind_group: GPUBindGroup
+        bind_group: GPUBindGroup,
+        depth_texture: GPUTexture,
     ) {
         this.render_pipeline = render_pipeline
         this.uniform_buffer = uniform_buffer
         this.vertex_buffer = vertex_buffer
         this.bind_group = bind_group
+        this.depth_texture = depth_texture
     }
 
     update_uniforms(device: GPUDevice, time: number) {
@@ -234,7 +255,13 @@ export class RenderPipeline {
                     storeOp: "store",
                     clearValue: [0, 0, 0, 1]
                 }
-            ]
+            ],
+            depthStencilAttachment: {
+                view: this.depth_texture.createView(),
+                depthClearValue: 1.0,
+                depthLoadOp: "clear",
+                depthStoreOp: "store"
+            }
         }
         
         const render_pass = encoder.beginRenderPass(pass_description)
@@ -245,13 +272,14 @@ export class RenderPipeline {
         render_pass.end();
     }
 
-    static async build(device: GPUDevice, context: GPUCanvasContext): Promise<RenderPipeline> {
+    static async build(device: GPUDevice, canvas: HTMLCanvasElement, context: GPUCanvasContext): Promise<RenderPipeline> {
         configure_context(device, context)
         const uniform_buffer = make_uniform_buffer(device)
         const vertex_buffer = make_vertex_buffer(device)
         const bind_group_layout = make_bind_group_layout(device)
         const bind_group = make_bind_group(device, bind_group_layout, uniform_buffer)
+        const depth_texture = make_depth_texture(device, canvas)
         const render_pipeline = await make_render_pipeline(device, bind_group_layout)
-        return new RenderPipeline(render_pipeline, uniform_buffer, vertex_buffer, bind_group)
+        return new RenderPipeline(render_pipeline, uniform_buffer, vertex_buffer, bind_group, depth_texture)
     }
 }
