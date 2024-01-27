@@ -12,12 +12,6 @@ struct VertexOutput {
 }
 
 const DIMENSIONS = vec3u(10, 10, 10);
-const DEG_45 = radians(45);
-const ROTATE_45_Y = mat3x3f(
-    cos(DEG_45), 0, -sin(DEG_45),
-    0, 1, 0,
-    sin(DEG_45), 0, cos(DEG_45),
-);
 
 const MAGIC_ANGLE = 0.615479709; // atan(1/sqrt(2))
 const TILT = mat3x3f(
@@ -25,6 +19,16 @@ const TILT = mat3x3f(
     0, cos(MAGIC_ANGLE), sin(MAGIC_ANGLE),
     0, -sin(MAGIC_ANGLE), cos(MAGIC_ANGLE),
 );
+
+fn rotate_y(angle: f32) -> mat3x3f {
+    let c = cos(angle);
+    let s = sin(angle);
+    return mat3x3f(
+        c, 0, -s,
+        0, 1, 0,
+        s, 0, c,
+    );
+}
 
 
 fn get_grid_coords(index: u32) -> vec3u {
@@ -36,6 +40,8 @@ fn get_grid_coords(index: u32) -> vec3u {
     return vec3u(x, y, z);
 }
 
+@group(0) @binding(0) var<uniform> time: f32;
+
 @vertex
 fn vertex_main(input: VertexInput) -> VertexOutput {
     // Position the cube instance. Each cube will be 1 unit wide, and
@@ -43,7 +49,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     let grid_coords = get_grid_coords(input.instance_index);
     let position_model = vec3f(grid_coords) + input.position - 0.5 * vec3f(DIMENSIONS);
 
-    let rotated = TILT * ROTATE_45_Y * position_model;
+    let rotated = TILT * rotate_y(time) * position_model;
 
     // The blocks fit within [-5, 5]^3.
     // Our view frustum will be orthographic, but the canvas size has a 5:7 aspect ratio

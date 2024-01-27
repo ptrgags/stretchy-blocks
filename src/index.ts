@@ -21,9 +21,12 @@ async function main() {
 
     const render_pipeline = await RenderPipeline.build(device, context)
 
+    const start = performance.now()
     const render = () => {
+        const elapsed_time = (performance.now() - start) / 1000.0
         const encoder = device.createCommandEncoder()
 
+        render_pipeline.update_uniforms(device, elapsed_time)
         render_pipeline.render(encoder, context)
         
         device.queue.submit([encoder.finish()])

@@ -5,7 +5,9 @@ const SWAP_CHAIN_FORMAT = "bgra8unorm"
 // 6 faces * 3 triangle vertices (unique because of normals)
 const CUBE_VERTICES = 36;
 const FACES = 6;
-const SIZE_VEC3F = 4 * 3;
+
+const SIZE_FLOAT = 4;
+const SIZE_VEC3F = SIZE_FLOAT * 3;
 const SIZE_POSITION = SIZE_VEC3F;
 const SIZE_NORMAL = SIZE_VEC3F;
 const SIZE_VERTEX = SIZE_POSITION + SIZE_NORMAL;
@@ -85,6 +87,20 @@ function configure_context(device: GPUDevice, context: GPUCanvasContext) {
     })
 }
 
+function make_uniform_buffer(device: GPUDevice): GPUBuffer {
+    const uniform_buffer = device.createBuffer({
+        size: SIZE_FLOAT,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true,
+    })
+
+    let typed_array = new Float32Array(uniform_buffer.getMappedRange())
+    typed_array[0] = 0.0
+
+    uniform_buffer.unmap()
+    return uniform_buffer
+}
+
 function make_vertex_buffer(device: GPUDevice): GPUBuffer {
     const vertex_buffer = device.createBuffer({
         size: CUBE_VERTICES * SIZE_VERTEX,
@@ -100,11 +116,44 @@ function make_vertex_buffer(device: GPUDevice): GPUBuffer {
     return vertex_buffer
 }
 
-async function make_render_pipeline(device: GPUDevice): Promise<GPURenderPipeline> {
+function make_bind_group(device: GPUDevice, layout: GPUBindGroupLayout, uniform_buffer: GPUBuffer): GPUBindGroup {
+    return device.createBindGroup({
+        label: "stretchy_blocks",
+        layout,
+        entries: [
+            {
+                binding: 0,
+                resource: {
+                    buffer: uniform_buffer
+                }
+            }
+        ]
+    })
+}
+
+function make_bind_group_layout(device: GPUDevice): GPUBindGroupLayout {
+    return device.createBindGroupLayout({
+        label: "stretchy_blocks",
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                buffer: {
+                    type: "uniform"
+                }
+            }
+        ]
+    })
+}
+
+async function make_render_pipeline(
+    device: GPUDevice,
+    bind_group_layout: GPUBindGroupLayout
+): Promise<GPURenderPipeline> {
     const shader_module = await compile_shader(device, "shaders/stretchy_blocks.wgsl");
-    
+
     const pipeline_layout = device.createPipelineLayout({
-        bindGroupLayouts: []
+        bindGroupLayouts: [bind_group_layout]
     })
 
     const vertex_state: GPUVertexState = {
@@ -152,14 +201,28 @@ async function make_render_pipeline(device: GPUDevice): Promise<GPURenderPipelin
 
 export class RenderPipeline {
     render_pipeline: GPURenderPipeline
+    uniform_buffer: GPUBuffer
     vertex_buffer: GPUBuffer
+    bind_group: GPUBindGroup
 
     constructor(
         render_pipeline: GPURenderPipeline,
-        vertex_buffer: GPUBuffer
+        uniform_buffer: GPUBuffer,
+        vertex_buffer: GPUBuffer,
+        bind_group: GPUBindGroup
     ) {
         this.render_pipeline = render_pipeline
+        this.uniform_buffer = uniform_buffer
         this.vertex_buffer = vertex_buffer
+        this.bind_group = bind_group
+    }
+
+    update_uniforms(device: GPUDevice, time: number) {
+        device.queue.writeBuffer(
+            this.uniform_buffer,
+            0,
+            new Float32Array([time])
+        )
     }
 
     render(encoder: GPUCommandEncoder, context: GPUCanvasContext) {
@@ -177,14 +240,18 @@ export class RenderPipeline {
         const render_pass = encoder.beginRenderPass(pass_description)
         render_pass.setPipeline(this.render_pipeline)
         render_pass.setVertexBuffer(0, this.vertex_buffer)
+        render_pass.setBindGroup(0, this.bind_group)
         render_pass.draw(CUBE_VERTICES, INSTANCE_COUNT);
         render_pass.end();
     }
 
     static async build(device: GPUDevice, context: GPUCanvasContext): Promise<RenderPipeline> {
         configure_context(device, context)
-        const vertex_buffer = make_vertex_buffer(device);
-        const render_pipeline = await make_render_pipeline(device);
-        return new RenderPipeline(render_pipeline, vertex_buffer)
+        const uniform_buffer = make_uniform_buffer(device)
+        const vertex_buffer = make_vertex_buffer(device)
+        const bind_group_layout = make_bind_group_layout(device)
+        const bind_group = make_bind_group(device, bind_group_layout, uniform_buffer)
+        const render_pipeline = await make_render_pipeline(device, bind_group_layout)
+        return new RenderPipeline(render_pipeline, uniform_buffer, vertex_buffer, bind_group)
     }
 }
