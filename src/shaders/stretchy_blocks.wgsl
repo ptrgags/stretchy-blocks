@@ -11,7 +11,12 @@ struct VertexOutput {
     @location(2) @interpolate(flat) grid_coords: vec3u,
 }
 
-const DIMENSIONS = vec3u(10, 10, 10);
+struct Uniforms {
+    dimensions: vec3u,
+    time: f32,
+}
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 const MAGIC_ANGLE = 0.615479709; // atan(1/sqrt(2))
 const TILT = mat3x3f(
@@ -30,26 +35,63 @@ fn rotate_y(angle: f32) -> mat3x3f {
     );
 }
 
+fn get_grid_coords(index: u32, dimensions: vec3u) -> vec3u {
+    // index = z * WH + y * W + x
+    // modulo the width gives x
+    let x = index % dimensions.x;
 
-fn get_grid_coords(index: u32) -> vec3u {
-    let intermediate = index / DIMENSIONS.x;
-    let x = index % DIMENSIONS.x;
-    let y = intermediate % DIMENSIONS.y;
-    let z = intermediate / DIMENSIONS.y;
+    // using integer division, we have
+    // intermediate = z * H + y
+    // so the quotient is z, remainder is y
+    let intermediate = index / dimensions.x;
+    let y = intermediate % dimensions.y;
+    let z = intermediate / dimensions.y;
 
     return vec3u(x, y, z);
 }
 
-@group(0) @binding(0) var<uniform> time: f32;
+// Raise x to a power:
+// k = 0 -> 0
+// k = 0.5 -> 1
+// k = 1 -> infinity
+fn stretch_function(x: vec3f, k: vec3f) -> vec3f {
+    let exponent = tan(radians(90) * k);
+    return pow(x, exponent);
+}
+
+fn stretch_blocks(
+    grid_coords: vec3f,
+    dimensions: vec3f,
+    position: vec3f,
+    time: f32
+) -> vec3f {
+    let k = vec3f(0.5 + 0.2 * sin(2.0 * time));
+    let min_coords = grid_coords / dimensions;
+    let max_coords = (grid_coords + 1.0) / dimensions;
+
+    let min_corner = stretch_function(min_coords, k);
+    let max_corner = stretch_function(max_coords, k);
+    let position_percent = mix(min_corner, max_corner, position);
+    return position_percent * dimensions;
+}
+
 
 @vertex
 fn vertex_main(input: VertexInput) -> VertexOutput {
     // Position the cube instance. Each cube will be 1 unit wide, and
     // we want to center this based on the overall bounding box.
-    let grid_coords = get_grid_coords(input.instance_index);
-    let position_model = vec3f(grid_coords) + input.position - 0.5 * vec3f(DIMENSIONS);
+    let grid_coords = get_grid_coords(input.instance_index, uniforms.dimensions);
 
-    let rotated = TILT * rotate_y(time) * position_model;
+    let model_coords = stretch_blocks(
+        vec3f(grid_coords),
+        vec3f(uniforms.dimensions),
+        input.position,
+        uniforms.time
+    );
+
+    let position_model = model_coords - 0.5 * vec3f(uniforms.dimensions);
+
+    let rotated = TILT * rotate_y(uniforms.time) * position_model;
 
     // Before rotation, the blocks fit within [-5, 5]^3.
     // After rotation, it's at most 5 * sqrt(3) in every direction, which is about 8.66
@@ -65,7 +107,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     //        then add 0.5 to get [0, 1]
     var position_clip = rotated / vec3f(10.0, 14.0, -20.0) + vec3f(0.0, 0.0, 0.5);
 
-    let coords_from_center = grid_coords - DIMENSIONS / 2;
+    let coords_from_center = grid_coords - uniforms.dimensions / 2;
     const RADIUS = 3.5;
     let yeet_mask = step(RADIUS * RADIUS, f32(dot(coords_from_center, coords_from_center)));
 

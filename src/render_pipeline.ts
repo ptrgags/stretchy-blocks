@@ -12,6 +12,7 @@ const SIZE_POSITION = SIZE_VEC3F;
 const SIZE_NORMAL = SIZE_VEC3F;
 const SIZE_VERTEX = SIZE_POSITION + SIZE_NORMAL;
 
+const DIMENSIONS = [10, 10, 10]
 const INSTANCE_COUNT = 10 * 10 * 10;
 
 const CUBE_POSITIONS = [
@@ -75,16 +76,6 @@ function * generate_cube_data(): Generator<number, void, undefined> {
 }
 
 const CUBE_DATA: number[] = [...generate_cube_data()]
-for (let i = 0; i < CUBE_DATA.length / 6; i++) {
-    console.log(
-        CUBE_DATA[6 * i + 0],
-        CUBE_DATA[6 * i + 1],
-        CUBE_DATA[6 * i + 2],
-        CUBE_DATA[6 * i + 3],
-        CUBE_DATA[6 * i + 4],
-        CUBE_DATA[6 * i + 5],
-    )
-}
 
 function configure_context(device: GPUDevice, context: GPUCanvasContext) {
     context?.configure({
@@ -99,13 +90,23 @@ function configure_context(device: GPUDevice, context: GPUCanvasContext) {
 
 function make_uniform_buffer(device: GPUDevice): GPUBuffer {
     const uniform_buffer = device.createBuffer({
-        size: SIZE_FLOAT,
+        // dimensions is a vec3u but padded to 4 u32
+        // time is a f32, but padded to 4 floats
+        size: 4 * SIZE_FLOAT,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         mappedAtCreation: true,
     })
 
-    let typed_array = new Float32Array(uniform_buffer.getMappedRange())
-    typed_array[0] = 0.0
+    let view = new DataView(uniform_buffer.getMappedRange())
+    const little_endian = true;
+
+    const [W, H, D] = DIMENSIONS;
+    view.setUint32(0, W, little_endian);
+    view.setUint32(4, H, little_endian);
+    view.setUint32(8, D, little_endian);
+
+    const time = 0.0;
+    view.setFloat32(12, time, little_endian);
 
     uniform_buffer.unmap()
     return uniform_buffer
@@ -249,11 +250,18 @@ export class RenderPipeline {
     }
 
     update_uniforms(device: GPUDevice, time: number) {
-        device.queue.writeBuffer(
-            this.uniform_buffer,
-            0,
-            new Float32Array([time])
-        )
+        const buffer = new ArrayBuffer(4 * SIZE_FLOAT);
+        const view = new DataView(buffer);
+        const little_endian = true;
+
+        const [W, H, D] = DIMENSIONS;
+        view.setUint32(0, W, little_endian);
+        view.setUint32(4, H, little_endian);
+        view.setUint32(8, D, little_endian);
+
+        view.setFloat32(12, time, little_endian);
+
+        device.queue.writeBuffer(this.uniform_buffer, 0, buffer)
     }
 
     render(encoder: GPUCommandEncoder, context: GPUCanvasContext) {
