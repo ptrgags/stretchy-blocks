@@ -83,6 +83,10 @@ fn position_instances(position_model: vec3f, grid_coords: vec3f, dimensions: vec
     return stacked / dimensions;
 }
 
+fn stretch(uvw: vec3f, time: f32) -> vec3f {
+    return smoothstep(vec3f(0.0), vec3f(1.0), uvw - 0.25 * sin(0.5 * time));
+}
+
 fn project_orthographic(rotated: vec3f) -> vec3f {
     // Before rotation, the blocks fit within [-1, 1]^3.
     // So the diagonal is cbrt(1 - -1) = cbrt(2)
@@ -100,21 +104,6 @@ fn project_orthographic(rotated: vec3f) -> vec3f {
     rescaled.z = -0.5 * rescaled.z + 0.5;
 
     return rescaled;
-
-    
-    //return rotated / dimensions * flip_z + vec3f(0.0, 0.0, 0.5);
-
-    // The canvas is a trading card size, i.e. 5:7 aspect ratio. So if the
-    // x and z coordinates have a width of 2, then the height will be 
-    // 2 * 7/5 = 14/5
-    // So we have a view volume of [-1, 1] x [-14/10, 14/10] x [-1, 1]
-    // We want to map it to clip space, [-1, 1] x [-1, 1] x [0, 1]
-    // (with z reversed since it's into the screen)
-    //
-    // for x: no change
-    // for y: divide by 10/14
-    // for z: 0.5 + 0.5 * x
-    //return rotated * vec3f(1.0 * 1.0 / 2.0, 14.0 / 10.0, -0.5 * 1.0 / 2.0) + vec3f(0.0, 0.0, 0.5);
 }
 
 // Raise x to a power:
@@ -142,6 +131,7 @@ fn stretch_blocks(
     return position_percent * dimensions;
 }
 
+// cube_vertices * instance_count -> 36 * 4096
 @vertex
 fn vertex_main(input: VertexInput) -> VertexOutput {
     // Position the cube instance. Each cube will be 1 unit wide, and
@@ -160,18 +150,11 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     // now position and scale the instances to form a cube in [0, 1]
     let position_instance = position_instances(position_model, vec3f(grid_coords), vec3f(uniforms.dimensions)); 
 
-    // TODO: apply a stretching function from [0, 1]^3 -> [0, 1]^3
-    /*
-    let model_coords = stretch_blocks(
-        vec3f(grid_coords),
-        vec3f(uniforms.dimensions),
-        input.position,
-        uniforms.time
-    );
-    */
+    // Mess with the coordinates a bit to make the blocks stretch and squish.
+    let position_stretched = stretch(position_instance, uniforms.time);
 
     // Position the model in world space. Make the overall cube fit in [-1, 1]
-    let position_world = 2.0 * position_instance - 1.0;
+    let position_world = 2.0 * position_stretched - 1.0;
 
     // For isometric projection, rotate around the y axis as desired, then
     // tilt the model towards the camera so the top faces are showing
@@ -199,7 +182,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4f {
     let edge_masks = step(vec3f(0.8), dist);
     let masks = edge_masks.yzx * edge_masks.zxy;
     let brightness = max(max(masks.x, masks.y), masks.z);
-    let color = mix(input.uvw, vec3f(0.0), brightness);
+    let color = mix(input.global_uvw, vec3f(0.0), brightness);
 
-    return vec4f(input.global_uvw, 1.0);
+    return vec4f(color, 1.0);
 }
