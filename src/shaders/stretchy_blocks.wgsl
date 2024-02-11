@@ -14,6 +14,7 @@ struct VertexOutput {
     @location(1) uvw: vec3f,
     // Integer grid coordinates of the current block
     @location(2) @interpolate(flat) grid_coords: vec3u,
+    @location(3) global_uvw: vec3f,
 }
 
 struct Uniforms {
@@ -177,31 +178,9 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     const MAGIC_ANGLE = 0.615479709; // atan(1/sqrt(2))
     let TILT = rotate_x(MAGIC_ANGLE);
     let isometric = TILT * rotate_y(uniforms.time);
-
     let rotated = isometric * position_world;
-    
-
-    // So let's be generous and say it fits within [-10, 10]^3
-    // The canvas size has a 5:7 aspect ratio, so if our width is 20 units wide, then
-    // the height is 20 / (5/7) = 28 units.
-    // So we want to map the box [-10, 10] x [-14, 14] x [-10, 10] to the
-    // normalized box [-1, 1], [-1, 1], [0, 1].
-    // for x: divide by 10
-    // for y: divide by 14
-    // for z: divide by 2 * 10 (to get [-0.5, 0.5]), 
-    //        multiply by -1 (since depth goes into the screen),
-    //        then add 0.5 to get [0, 1]
-    //var position_clip = rotated / vec3f(10.0, 14.0, -20.0) + vec3f(0.0, 0.0, 0.5);
-
-    /*let coords_from_center = grid_coords - uniforms.dimensions / 2;
-    const RADIUS = 3.5;
-    let yeet_mask = step(RADIUS * RADIUS, f32(dot(coords_from_center, coords_from_center)));
-    */
 
     let position_clip = project_orthographic(rotated);
-
-    //const YEET = 10000.0;
-    //position_clip.x += YEET * yeet_mask; //f32(dot(grid_coords, vec3u(1)) % 2 == 1);
 
     var output: VertexOutput;
     output.position = vec4f(position_clip, 1.0);
@@ -210,6 +189,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
 
     // Position also serves as uvw coordinates!
     output.uvw = input.position;
+    output.global_uvw = position_instance;
     return output;
 }
 
@@ -221,5 +201,5 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4f {
     let brightness = max(max(masks.x, masks.y), masks.z);
     let color = mix(input.uvw, vec3f(0.0), brightness);
 
-    return vec4f(color, 1.0);
+    return vec4f(input.global_uvw, 1.0);
 }

@@ -12,8 +12,9 @@ const SIZE_POSITION = SIZE_VEC3F;
 const SIZE_NORMAL = SIZE_VEC3F;
 const SIZE_VERTEX = SIZE_POSITION + SIZE_NORMAL;
 
-const DIMENSIONS = [10, 10, 10]
-const INSTANCE_COUNT = 10 * 10 * 10;
+const N = 16
+const DIMENSIONS = [N, N, N]
+const INSTANCE_COUNT = N * N * N
 
 const CUBE_POSITIONS = [
     [0, 0, 0],
