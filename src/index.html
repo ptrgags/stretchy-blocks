@@ -2,9 +2,27 @@
 <html>
     <head>
         <title>Stretchy Blocks</title>
+        <style>
+        body {
+            padding: 0px;
+            margin: 0 auto;
+            background-color: #111111;
+            font-family: sans-serif;
+            color: #999999;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        </style>
     </head>
     <body>
-        <canvas id="webgpu-canvas" width="500", height="700"></canvas>
+        <div class="container">
+            <h1>Stretchy Blocks</h1>
+            <canvas id="webgpu-canvas" width="500", height="700"></canvas>
+        </div>
         <script type="module" src="src/index.js"></script>
     </body>
 </html>
