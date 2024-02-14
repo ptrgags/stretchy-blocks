@@ -166,6 +166,15 @@ fn hesitate(t: f32, pause:f32) -> f32 {
     return max((t - pause) / (1.0 - pause), 0.0);
 }
 
+/* 
+ * Normally time passes 1 second per second. This function
+ * pauses the progression of time freq times per second. 
+ * The "pause" parameter from [0, 1] 
+ * lets you control how long each pause is as a fraction of a single period.
+ *
+ * See this graph in Desmos:
+ * https://www.desmos.com/calculator/iwvpzqangh
+ */
 fn hesitate_repeat(t: f32, pause:f32, freq: f32) -> f32 {
     let scaled = freq * t;
     return (floor(scaled) + hesitate(fract(scaled), pause)) / freq;
