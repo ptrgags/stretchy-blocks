@@ -9,12 +9,13 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) position: vec4f,
-    @location(0) normal: vec3f,
+    @location(0) position_world: vec3f,
+    @location(1) normal: vec3f,
     // UV coordinates within the current block.
-    @location(1) uvw: vec3f,
+    @location(2) uvw: vec3f,
     // Integer grid coordinates of the current block
-    @location(2) @interpolate(flat) grid_coords: vec3u,
-    @location(3) global_uvw: vec3f,
+    @location(3) @interpolate(flat) grid_coords: vec3u,
+    @location(4) global_uvw: vec3f,
 }
 
 struct Uniforms {
@@ -62,8 +63,9 @@ fn get_grid_coords(index: u32, dimensions: vec3u) -> vec3u {
 }
 
 fn visibility_mask(uvw: vec3f, time: f32) -> f32 {
-    let height = 3.0 * sin(time);
-    return clamp(dot(uvw, vec3f(1.0)) + height, 0.0, 1.0);
+    //let height = 3.0 * sin(0.5 * time);
+    //return clamp(dot(uvw, vec3f(1.0)) + height, 0.0, 1.0);
+    return 1.0;
 }
 
 fn compute_visibility(grid_coords_normalized: vec3f, position: vec3f, time: f32) -> vec3f {
@@ -83,8 +85,100 @@ fn position_instances(position_model: vec3f, grid_coords: vec3f, dimensions: vec
     return stacked / dimensions;
 }
 
+/* 
+ * warp the domain [0, 1] -> [0, 1] using a single 2D control point. This is
+ * used as a helper to compute the stretch function.
+ * 
+ * Inspired by a generalization of the pulse-width-modulation functionality on
+ * my ASM Hydrasynth synthesizer. It warps the domain by picking a control point
+ * C = (a, b) and makes two line segments, one between (0, 0) and C and the
+ * other between C and (1, 1). This works similarly to the power function x^p,
+ * however the 2D control point is easier to control.
+ *
+ * in particular: when the control point is below y = x, it compresses the 
+ * low end of the range while stretching out the high end of the range. When
+ * the control point is above y = x, it compresses the high end and stretches out
+ * the low end. When the control point is on y = x, the range is unchanged
+ *
+ * This is the blue curve f(x) in the Desmos graph https://www.desmos.com/calculator/rid2vsvpou
+ */
+fn pwm_warp(control_point: vec2f, x: f32) -> f32 {
+    let a = control_point.x;
+    let b = control_point.y;
+
+    // Create a line from (0, 0) to control_point
+    let line_0c = mix(0.0, b, x / a);
+    // create a line from control_point to (1, 1)
+    let line_c1 = mix(b, 1.0, (x - a) / (1.0 - a));
+
+    // Switch between the lines depending on whether the x coordinate is
+    // to the left or right of a.
+    //
+    // Why the step function and not just x? while the latter would give a
+    // single quadratic curve, it sometimes goes outside the [0, 1] range
+    // which is undesirable for the stretch function.
+    return mix(line_0c, line_c1, step(a, x));
+}
+
+/*
+ * pwm_warp only stretches values to one side of the unit square. I want
+ * to bunch symmetrically about the center, so this makes the curve have
+ * rotation symmetry about (0.5, 0.5).
+ *
+ * If the control point is below y = x, the curve looks like a linear
+ * approximation of smoothstep(), but the control point allows more variation,
+ * e.g. moving it above y = x makes it work like an approximate inverse
+ * smoothstep without needing inverse trig functions!
+ *
+ * see the purple curve h(x) in the Desmos graph https://www.desmos.com/calculator/rid2vsvpou
+ */
+fn symmetric_warp(control_point: vec2f, x: f32) -> f32 {
+    // Split the domain into two halves
+    let halves = modf(2.0 * x);
+
+
+    // The first half will use the warp function, the second half will
+    // use a rotated copy
+    let curve = pwm_warp(control_point, halves.fract);
+    // mirroring the control point has the asame effect as rotating
+    // the curve 180 degrees
+    let rotated = pwm_warp(1.0 - control_point, halves.fract);
+    let symmetric_curve = halves.whole + mix(curve, rotated, halves.whole);
+
+    // The range of the curve is now [0, 2], we want [0, 1]
+    return 0.5 * symmetric_curve;
+}
+
+// Triangle wave "cosine" and "sine". These have periods of 1
+fn triangle_cos(x: f32) -> f32 {
+    return abs(2.0 * x % 2.0 - 1.0);
+}
+
+fn triangle_sin(x: f32) -> f32 {
+    return triangle_cos(x - 0.25);
+}
+
+fn diamond(t: f32) -> vec2f {
+    return vec2f(triangle_cos(t), triangle_sin(t));
+}
+
+fn hesitate(t: f32, pause:f32) -> f32 {
+    return max((t - pause) / (1.0 - pause), 0.0);
+}
+
+fn hesitate_repeat(t: f32, pause:f32, freq: f32) -> f32 {
+    let scaled = freq * t;
+    return (floor(scaled) + hesitate(fract(scaled), pause)) / freq;
+}
+
 fn stretch(uvw: vec3f, time: f32) -> vec3f {
-    return smoothstep(vec3f(0.0), vec3f(1.0), uvw - 0.25 * sin(0.5 * time));
+    let pause_at_corners = hesitate_repeat(0.25 * time, 0.25, 4.0);
+    let control_point = 0.5 + 0.375 * diamond(pause_at_corners);
+
+    let x = symmetric_warp(control_point, uvw.x);
+    let z = symmetric_warp(control_point, uvw.z);
+
+    return vec3f(x, uvw.y, z);
 }
 
 fn project_orthographic(rotated: vec3f) -> vec3f {
@@ -160,14 +254,24 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     // tilt the model towards the camera so the top faces are showing
     const MAGIC_ANGLE = 0.615479709; // atan(1/sqrt(2))
     let TILT = rotate_x(MAGIC_ANGLE);
-    let isometric = TILT * rotate_y(uniforms.time);
+    let isometric = TILT * rotate_y(0.1 * uniforms.time);
     let rotated = isometric * position_world;
 
     let position_clip = project_orthographic(rotated);
 
+    // the normal is unchanged
+    // the only thing we do in world space is rotate it. But note that
+    //
+    // rotation^(-T) = (rotation^T)^T = rotation
+    // 
+    // for rotation matrices, so we just need to multiply the normal
+    // by the isometric projection matrix
+    let normal_world = isometric * input.normal;
+
     var output: VertexOutput;
     output.position = vec4f(position_clip, 1.0);
-    output.normal = input.normal;
+    output.position_world = rotated;
+    output.normal = normal_world;
     output.grid_coords = grid_coords;
 
     // Position also serves as uvw coordinates!
@@ -176,13 +280,29 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     return output;
 }
 
+fn wide_cos(x: f32, q: f32) -> f32 {
+    return min(q * cos(x) + q, 1.0);
+}
+
+const pi = 3.141593;
+
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4f {
+    // Diffuse lighting
+    const color_freq = vec3f(1.0, 2.0, 3.0);
+
+    let diffuse_color = vec3f(0.75 + 0.25 * cos(color_freq * f32(input.grid_coords.y)));
+    const light_world = normalize(vec3f(-0.5, 0.5, 1.0));
+    let normal_world = normalize(input.normal);
+    let diffuse = diffuse_color * max(dot(normal_world, light_world), 0.0);
+
+    // Highlight the edge black
     let dist = 2.0 * abs(input.uvw - 0.5);
     let edge_masks = step(vec3f(0.8), dist);
     let masks = edge_masks.yzx * edge_masks.zxy;
-    let brightness = max(max(masks.x, masks.y), masks.z);
-    let color = mix(input.global_uvw, vec3f(0.0), brightness);
+    let edge = max(max(masks.x, masks.y), masks.z);
+
+    let color = mix(diffuse, vec3f(0.0), edge);
 
     return vec4f(color, 1.0);
 }
