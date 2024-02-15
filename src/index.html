@@ -40,18 +40,35 @@
         .gh-icon img {
             width: 32px;
         }
+
+        #compatibility-warning {
+            display: none;
+            width: 500px;
+            color: #e72e0d;
+            background-color: #333333;
+        }
+
+        a {
+            color: #00aaff;
+        }
+
         </style>
     </head>
     <body>
+        
         <div class="gh-icon">
             <a href="https://github.com/ptrgags/stretchy-blocks"><img alt="GitHub icon that links to the project repo" src="./assets/github-mark-white.svg" /></a>
         </div>
         <div class="container">
             <h1>Stretchy Blocks</h1>
+            <div id="compatibility-warning">
+                Sorry, your device doesn't support WebGPU! Please try in another browser, such as Chrome.
+                WebGPU is a relatively new feature, so not all browsers support it yet.
+                See <a href="https://caniuse.com/webgpu">Can I Use...</a> for browser compatibility.
+            </div>
             <canvas id="webgpu-canvas" width="500", height="700"></canvas>
             <div class="description">
             <p>
-
                 This is a learning project to get familiar with the basics of
                 WebGPU, as well as more practice with TypeScript.
             <p>

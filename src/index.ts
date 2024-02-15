@@ -1,9 +1,11 @@
 import { RenderPipeline } from "./render_pipeline.js";
 
 async function get_device(): Promise<GPUDevice> {
-    const adapter = await navigator.gpu.requestAdapter();
+    const adapter = await navigator.gpu?.requestAdapter();
     if (!adapter) {
-        throw new Error("Your browser doesn't support WebGPU :(");
+        const warning = document.getElementById("compatibility-warning") as HTMLElement;
+        warning.style.display = 'block';
+        throw new Error("Could not get WebGPU adapter :(");
     }
 
     return await adapter.requestDevice()
