@@ -105,7 +105,7 @@ fn visibility_mask(uvw: vec3f, time: f32) -> f32 {
     // The pattern is periodic, but it takes a while to go through.
     let center = vec2f(
         mod_diff(t, 3, 5),
-        mod_diff(t, 3, 2),
+        mod_diff(t, 3, 4),
     );
 
     // Compute distance from the center for this horizontal plane
@@ -115,7 +115,7 @@ fn visibility_mask(uvw: vec3f, time: f32) -> f32 {
     // slice. I combined two different frequencies to make a bimodal shape,
     // see here:
     // https://www.desmos.com/calculator/kto0shp4c4
-    let radius = 1.0 / 4.0 * (0.5 * bell_train(t) + 2.0 * bell_train(2.0 * t));
+    let radius = 1.0 / 5.0 * (0.5 * bell_train(t) + 2.0 * bell_train(2.0 * t));
 
     // Finally, combine the distance field and the radius to make a solid
     // of revolution
@@ -318,7 +318,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
     // tilt the model towards the camera so the top faces are showing
     const MAGIC_ANGLE = 0.615479709; // atan(1/sqrt(2))
     let TILT = rotate_x(MAGIC_ANGLE);
-    let isometric = TILT * rotate_y(0.1 * uniforms.time);
+    let isometric = TILT * rotate_y(0.2 * uniforms.time);
     let rotated = isometric * position_world;
 
     let position_clip = project_orthographic(rotated);
@@ -348,14 +348,69 @@ fn wide_cos(x: f32, q: f32) -> f32 {
     return min(q * cos(x) + q, 1.0);
 }
 
-const pi = 3.141593;
+
+// Colors from Paletton. The output were percents, hence having to divide
+// by 100.
+//
+// The palette was listed in reverse order of what I want. I'll fix it
+// in the math below :P.
+const PALETTE_LENGTH = 16;
+const PALETTE = array<vec3f, PALETTE_LENGTH>(
+    // green: brightest -> darkest
+    0.01 * vec3f(87.1, 94.9, 29.8),
+    0.01 * vec3f(80.4, 89.4, 12.9),
+    0.01 * vec3f(64.3, 72.5, 4.7),
+    0.01 * vec3f(50.6, 57.3, 0),
+
+    // orange: brightest -> darkest
+    0.01 * vec3f(97.3, 60.8, 30.6),
+    0.01 * vec3f(91.8, 49, 13.3),
+    0.01 * vec3f(74.1, 36.1, 4.7),
+    0.01 * vec3f(58.8, 26.7, 0),
+
+    // blue: brightest -> darkest
+    0.01 * vec3f(18.4, 58.4, 58.4),
+    0.01 * vec3f(7.8, 54.9, 54.9),
+    0.01 * vec3f(2.7, 44.7, 44.7),
+    0.01 * vec3f(0, 35.3, 35.3),
+
+    // purple: brightest -> darkest
+    0.01 * vec3f(57.6, 21.2, 63.9),
+    0.01 * vec3f(52.9, 9.8, 60.4),
+    0.01 * vec3f(42, 3.9, 48.6),
+    0.01 * vec3f(32.9, 0.8, 38.4),
+);
+
+fn pick_color(grid_coords: vec3u) -> vec3f {
+    // Divide the scene into 4 layers of 4 blocks thick. this will control
+    // the hue
+    let layer = grid_coords.y / 4;
+
+    // Height within layer
+    let height = layer % 4;
+
+    // Compute a checkerboard pattern, every cell is either 0 or 1.
+    let diagonal_plane = dot(grid_coords, vec3u(1));
+    let checkerboard = diagonal_plane % 2;
+
+    // The layer controls the primary color, but to make the checkerboard
+    // pattern stand out, when the checkerboard pattern is 1, switch to the next
+    // hue cyclically.
+    let hue = (layer + checkerboard) % 4;
+
+    // Within each layer, make a brightness gradient from 0-3
+    let brightness = height;
+
+    // Look up the color.
+    // The colors are listed in reverse, hence the backwards indexing.
+    let color_index = (4 * hue + brightness) % PALETTE_LENGTH;
+    return PALETTE[(PALETTE_LENGTH - 1) - color_index];
+}
 
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4f {
     // Diffuse lighting
-    const color_freq = vec3f(1.0, 2.0, 3.0);
-
-    let diffuse_color = vec3f(0.75 + 0.25 * cos(color_freq * f32(input.grid_coords.y)));
+    let diffuse_color = pick_color(input.grid_coords);
     const light_world = normalize(vec3f(-0.5, 0.5, 1.0));
     let normal_world = normalize(input.normal);
     let diffuse = diffuse_color * max(dot(normal_world, light_world), 0.0);
