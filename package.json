@@ -7,6 +7,7 @@
   "scripts": {
     "start": "http-server",
     "build": "tsc",
-    "copy-static": "copy-static.sh"
+    "copy-static": "copy-static.sh",
+    "deploy": "git subtree push --prefix=dist origin gh-pages"
   }
 }
