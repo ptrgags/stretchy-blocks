@@ -26,9 +26,26 @@
         .description {
             width: 800px;
         }
+
+        .gh-icon {
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 10px;
+            position: absolute;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .gh-icon img {
+            width: 32px;
+        }
         </style>
     </head>
     <body>
+        <div class="gh-icon">
+            <a href="https://github.com/ptrgags/stretchy-blocks"><img alt="GitHub icon that links to the project repo" src="./assets/github-mark-white.svg" /></a>
+        </div>
         <div class="container">
             <h1>Stretchy Blocks</h1>
             <canvas id="webgpu-canvas" width="500", height="700"></canvas>
