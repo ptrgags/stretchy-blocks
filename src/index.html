@@ -14,7 +14,17 @@
         .container {
             display: flex;
             flex-direction: column;
+            flex-wrap: wrap;
             align-items: center;
+        }
+
+        canvas {
+            max-width: 80vh;
+            object-fit: contain;  
+        }
+
+        .description {
+            width: 800px;
         }
         </style>
     </head>
@@ -22,6 +32,31 @@
         <div class="container">
             <h1>Stretchy Blocks</h1>
             <canvas id="webgpu-canvas" width="500", height="700"></canvas>
+            <div class="description">
+            <p>
+
+                This is a learning project to get familiar with the basics of
+                WebGPU, as well as more practice with TypeScript.
+            <p>
+            <p>
+                I'm using the instancing feature of WebGPU so I only upload
+                a cube to the GPU once, then I use the vertex shader to
+                generate a 16x16x16 grid of geometry.
+            </p>
+            <p>
+                There's a lot going on to make this animation:
+            </p>
+            <ol>
+                <li><strong>(Vertex Shader):</strong> Use the instance ID to identify the current cube and set up a 3D coordinate system</li>
+                <li><strong>(Vertex Shader):</strong> Compute the blobby shape animation as a 3D grayscale function. I call it the "visibility" of each block.</li>
+                <li><strong>(Vertex Shader):</strong> Based on the visibility, shrink the block. 1.0 visibility means full-sized block, 0.0 means 0 sized block (i.e. don't render), and values in between make smaller blocks which help make the shape look more round.</li>
+                <li><strong>(Vertex Shader):</strong> Stack the blocks into a large cube</li>
+                <li><strong>(Vertex Shader):</strong> Warp the coordinates within the large cube, this produces the stretching/squishing motion</li>
+                <li><strong>(Vertex Shader):</strong> Compute an Isometric projection by rotating the cube, tilting it towards the camera, and then applying orthographic projection.</li>
+                <li><strong>(Fragment Shader):</strong> Select a color for each block from a palette to make the checkerboard pattern</li>
+                <li><strong>(Fragment Shader):</strong> Apply diffuse shading and also outline the edges of the cube</li>
+            </ol>
+            </div>
         </div>
         <script type="module" src="src/index.js"></script>
     </body>
