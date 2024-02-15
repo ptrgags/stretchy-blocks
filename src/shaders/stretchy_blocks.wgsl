@@ -62,10 +62,64 @@ fn get_grid_coords(index: u32, dimensions: vec3u) -> vec3u {
     return vec3u(x, y, z);
 }
 
+// Because WGSL's mod uses truncate, not floor :(
+fn floor_mod(x: f32, modulus: f32) -> f32 {
+    return modulus * fract(x / modulus);
+}
+
+// Difference of remainders from two different moduli, with output 
+// rescaled to be between [0, 1].
+//
+// This operation was inspired by the Bridges paper "Let the Numbers Do the
+// Walking: Generating Turtle Dances on the Plane from Integer Sequences",
+// though used for a very different purpose.
+// 
+// https://archive.bridgesmathart.org/2017/bridges2017-139.html
+fn mod_diff(x: f32, a: f32, b: f32) -> f32 {
+    let diff = floor_mod(x, a) - floor_mod(x, b);
+
+    // the range of diff is [-(b-1), (a-1)], so remap to [0, 1].
+    return (diff + (b - 1.0)) / (a + b - 2.0);
+}
+
+/**
+ * Make a train of bell curves such that for every unit of the domain
+ * there is one bell curve. The output range is slightly less than [0, 1],
+ * 
+ * This is the blue curve in this Desmos sketch. Note that this can be
+ * combined with higher frequencies to make different shapes.
+ * https://www.desmos.com/calculator/65xv3qteke
+ */
+fn bell_train(x: f32) -> f32 {
+    let repeated = 4.0 * fract(x) - 2.0;
+    return exp(-repeated * repeated);
+}
+
 fn visibility_mask(uvw: vec3f, time: f32) -> f32 {
-    //let height = 3.0 * sin(0.5 * time);
-    //return clamp(dot(uvw, vec3f(1.0)) + height, 0.0, 1.0);
-    return 1.0;
+    // Simulate some random blobs moving vertically through the space.
+
+    // Advance time slowly
+    let t = uvw.y - 0.1 * time;
+
+    // Use difference of remainders to jitter the
+    // The pattern is periodic, but it takes a while to go through.
+    let center = vec2f(
+        mod_diff(t, 3, 5),
+        mod_diff(t, 3, 2),
+    );
+
+    // Compute distance from the center for this horizontal plane
+    let dist = length(uvw.xz - center);
+
+    // Make a train of bell curves to define the radius for each horizontal
+    // slice. I combined two different frequencies to make a bimodal shape,
+    // see here:
+    // https://www.desmos.com/calculator/kto0shp4c4
+    let radius = 1.0 / 4.0 * (0.5 * bell_train(t) + 2.0 * bell_train(2.0 * t));
+
+    // Finally, combine the distance field and the radius to make a solid
+    // of revolution
+    return smoothstep(radius + 0.1, radius, dist);
 }
 
 fn compute_visibility(grid_coords_normalized: vec3f, position: vec3f, time: f32) -> vec3f {
@@ -188,6 +242,7 @@ fn stretch(uvw: vec3f, time: f32) -> vec3f {
     let z = symmetric_warp(control_point, uvw.z);
 
     return vec3f(x, uvw.y, z);
+    //return uvw;
 }
 
 fn project_orthographic(rotated: vec3f) -> vec3f {
